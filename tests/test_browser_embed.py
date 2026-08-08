@@ -33,7 +33,14 @@ class BrowserEmbedTests(unittest.TestCase):
             token = json.load(response)["access_token"]
         widgets = Request(f"{API}/api/v1/widgets", headers={"Authorization": f"Bearer {token}"})
         with urlopen(widgets, timeout=5) as response:
-            public_id = json.load(response)[0]["public_id"]
+            available_widgets = json.load(response)
+        widget = next(
+            (item for item in available_widgets if {"name", "email"}.issubset({field["name"] for field in item["form_fields"]})),
+            None,
+        )
+        if widget is None:
+            raise RuntimeError("Browser proof requires a widget with name and email fields")
+        public_id = widget["public_id"]
         cls.directory = tempfile.TemporaryDirectory()
         Path(cls.directory.name, "index.html").write_text(f'<!doctype html><title>Customer site</title><script src="{API}/widget.v1.js?id={public_id}"></script>', encoding="utf-8")
         handler = http.server.SimpleHTTPRequestHandler
