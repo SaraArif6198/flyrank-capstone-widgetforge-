@@ -42,7 +42,10 @@ class BrowserEmbedTests(unittest.TestCase):
             raise RuntimeError("Browser proof requires a widget with name and email fields")
         public_id = widget["public_id"]
         cls.directory = tempfile.TemporaryDirectory()
-        Path(cls.directory.name, "index.html").write_text(f'<!doctype html><title>Customer site</title><script src="{API}/widget.v1.js?id={public_id}"></script>', encoding="utf-8")
+        Path(cls.directory.name, "index.html").write_text(
+            f'<!doctype html><html><head><title>Customer site</title></head><body><main><h1>Customer site</h1><script src="{API}/widget.v1.js?id={public_id}"></script></main></body></html>',
+            encoding="utf-8",
+        )
         handler = http.server.SimpleHTTPRequestHandler
         cls.server = socketserver.TCPServer(("127.0.0.1", 8080), lambda *args, **kwargs: handler(*args, directory=cls.directory.name, **kwargs))
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
@@ -57,10 +60,24 @@ class BrowserEmbedTests(unittest.TestCase):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             page = browser.new_page()
+            console_errors = []
+            failed_requests = []
+            error_responses = []
+            page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
+            page.on("requestfailed", lambda request: failed_requests.append(f"{request.url}: {request.failure}"))
+            page.on("response", lambda response: error_responses.append(f"{response.status} {response.url}") if response.status >= 400 else None)
             page.goto("http://localhost:8080", wait_until="networkidle")
-            self.assertTrue(page.locator(".wf-card").is_visible())
+            card = page.locator(".wf-card")
+            if not card.is_visible(timeout=2_000):
+                root_text = page.locator("[data-widgetforge-root]").inner_text()
+                browser.close()
+                self.fail(f"Widget did not render: {root_text}; console={console_errors}; failed_requests={failed_requests}; error_responses={error_responses}")
             page.locator('input[name="name"]').fill("Browser Lead")
             page.locator('input[name="email"]').fill("browser@example.com")
             page.locator(".wf-button").click()
-            self.assertTrue(page.get_by_text("Your submission was received.").is_visible())
+            confirmation = page.get_by_text("Your submission was received.")
+            if not confirmation.is_visible(timeout=5_000):
+                root_text = page.locator("[data-widgetforge-root]").inner_text()
+                browser.close()
+                self.fail(f"Submission confirmation did not render: {root_text}; console={console_errors}; error_responses={error_responses}")
             browser.close()
