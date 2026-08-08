@@ -1,54 +1,124 @@
+<div align="center">
+
 # WidgetForge
 
-**A multi-tenant embeddable lead-capture platform built for untrusted public traffic.**
+### A hardened, multi-tenant platform for embeddable lead-capture forms
 
-WidgetForge lets an owner configure a signup or contact form, install it on any website with one `<script>` tag, and review captured leads through authenticated dashboard APIs. The main engineering challenge is not rendering the form—it is safely accepting data from browsers and origins the platform does not control.
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)](https://react.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+![Tests](https://img.shields.io/badge/backend%20tests-7%2F7%20passing-16803A)
+![Status](https://img.shields.io/badge/status-local--first%20capstone-4055A8)
 
-The public submission path is deliberately hardened with CORS/preflight handling, request-size limits, schema validation, a honeypot, per-IP/widget rate limiting, idempotent writes, geo-provider fallback, and a transactional outbox for failure-safe notifications.
+**[Quick start](#quick-start)** · **[Live proof](#live-proof)** · **[Architecture](#architecture)** · **[API](#api-surface)** · **[Documentation](#documentation)**
 
-## Why this project
+</div>
 
-Typical embedded forms fail when exposed to the open internet: they trust client data, duplicate submissions after retries, leak tenant data, or turn a failed third-party call into a lost lead. WidgetForge demonstrates a backend-first approach to those problems:
+## Overview
 
-- **Multi-tenant isolation:** all owner data access is scoped by the tenant in the JWT, not a client-supplied tenant ID.
-- **Safe public writes:** browsers from an allowed external origin can submit; malformed, oversized, spammy, or burst traffic is rejected intentionally.
-- **Graceful degradation:** geo enrichment tries a primary provider, then a fallback, then stores the lead without geo rather than failing.
-- **Failure-safe side effects:** lead and outbox event are written atomically; notification failure never changes a successful submission response.
-- **Cache-aware widget delivery:** the versioned JavaScript bundle is immutable-cacheable while widget configuration uses short-lived caching and ETags.
+WidgetForge lets a customer configure a signup or contact form, copy one `<script>` tag, and collect leads from any permitted website. Owners manage widgets and leads in a React dashboard; visitors interact with a lightweight framework-free embedded widget.
+
+The core challenge is safely accepting input from browsers the platform does not control. WidgetForge therefore treats the public submission endpoint as an untrusted boundary and proves its behaviour with automated failure-mode tests.
+
+> A project for demonstrating backend engineering beyond CRUD: multi-tenancy, public API security, HTTP caching, idempotent writes, graceful dependency failure, and durable side effects.
+
+## Product flow
+
+```text
+Owner signs in → creates widget → copies one script tag → pastes it on customer website
+                                                            │
+                                                            ▼
+Visitor loads widget → submits form → protected public API → lead stored → owner dashboard
+```
+
+## Highlights
+
+| Capability | Implementation |
+|---|---|
+| **Multi-tenant ownership** | Tenant identity comes from the JWT; owner queries are scoped by tenant. |
+| **Embed delivery** | Versioned `widget.v1.js` plus a compact public config endpoint with ETag revalidation. |
+| **Public API hardening** | Explicit CORS/preflight, body-size guard, config-driven validation, clean 4xx errors. |
+| **Abuse controls** | Honeypot spam detection and an in-memory per-IP/widget rate limiter returning `429`. |
+| **Reliable writes** | An `Idempotency-Key` prevents duplicate form submissions on retry. |
+| **Resilient enrichment** | Geo provider A → provider B → store-without-geo fallback chain. |
+| **Failure-safe notification** | Submission and outbox event are written atomically; notifier failures retry without losing a lead. |
+| **Owner experience** | React dashboard for metrics, widgets, copyable install snippets, and submissions. |
 
 ## Architecture
 
 ```text
-Owner (JWT) ──► Widget & Dashboard API ──► Services ──► PostgreSQL
-                                                    ▲
-Customer website ──► widget.v1.js ──► Public config ┘
-       (second origin)                   │
+                          ┌────────────────────────────┐
+                          │       React dashboard       │
+                          │      localhost:5173         │
+                          └──────────────┬─────────────┘
+                                         │ JWT
                                          ▼
-Visitor ──► Public submission API ─► validate → rate limit/spam → geo A → geo B
-                                         │                              │
-                                         └── atomic lead + outbox ──────┘
-                                                       │
-                                                       ▼
-                                            notification worker / retry
+┌──────────────┐      ┌───────────────────────────────────────────┐
+│ Customer site│─────►│ FastAPI                                    │
+│ localhost:8080│     │ owner API · public config · submissions   │
+└──────┬───────┘     └──────┬─────────────┬──────────────────────┘
+       │                    │             │
+       ▼                    ▼             ▼
+widget.v1.js           PostgreSQL    Geo A → Geo B → no geo
+       │                    │
+       └─────► public submit └── transaction: submission + outbox
+                                               │
+                                               ▼
+                                      notification worker / retry
 ```
 
-The initial implementation is a modular monolith: FastAPI, SQLAlchemy, PostgreSQL, Docker Compose, and a framework-free widget bundle. It keeps local setup and transactional guarantees simple while retaining interfaces that can later support Redis rate limiting or a separate worker.
+The application is intentionally a **modular monolith**: route, service, repository, integration, and worker boundaries are clear, but it remains easy to run and reason about locally. See the [architecture document](docs/ARCHITECTURE.md) and [ADRs](docs/adr/) for trade-offs.
 
-## Features
+## Tech stack
 
-| Area | Included behaviour |
+| Layer | Technology |
 |---|---|
-| Owner management | JWT login, tenant-isolated widget CRUD, and per-widget embed snippet generation. |
-| Widget delivery | Versioned `widget.v1.js`, public config, cache headers, ETag revalidation, and a plain second-origin demo site. |
-| Public submissions | Config-driven field validation, 16 KB body limit, explicit CORS/preflight, generic JSON errors, and idempotency keys. |
-| Abuse resistance | Hidden honeypot and per-IP/widget in-memory rate limiter returning `429` with `Retry-After`. |
-| Resilience | Deterministic geo provider A → B fallback → no-geo degradation and a durable outbox worker with bounded retries. |
-| Dashboard | Tenant-only submission list plus total, per-widget, and country aggregation APIs. |
-| Verification | Seven automated tests covering authorization, CORS, cache revalidation, replay protection, abuse controls, provider failure, notification failure, and dashboard isolation. |
+| Owner UI | React, TypeScript, Vite, plain CSS |
+| Embedded widget | Framework-free JavaScript with scoped `wf-` styles |
+| API | Python, FastAPI, Pydantic |
+| Persistence | PostgreSQL, SQLAlchemy |
+| Authentication | JWT bearer tokens, Passlib/bcrypt password hashing |
+| Local platform | Docker Compose |
+| Verification | `unittest`, deterministic fakes for geo and notification dependencies |
+
+## Live proof
+
+### Owner dashboard
+
+The dashboard displays tenant-scoped metrics and widget performance.
+
+<img src="docs/screenshots/dashboard-overview.png" alt="WidgetForge React dashboard overview" width="900" />
+
+### Widget management
+
+Owners can create forms and copy a real API-generated embed snippet.
+
+<img src="docs/screenshots/widget-created.png" alt="WidgetForge widget list including a newly created Book a demo widget" width="900" />
+
+### Cross-origin embedded form
+
+The visitor widget is loaded from the API on a different origin and rendered with isolated styles.
+
+<img src="docs/screenshots/embedded-form.png" alt="Book a demo widget rendered on the customer website" width="500" />
+
+### Successful public capture
+
+The widget gives the visitor a safe confirmation after the public API accepts the submission.
+
+<img src="docs/screenshots/embedded-form-success.png" alt="Embedded WidgetForge form success state" width="500" />
+
+Token-bearing and personal-data screenshots are intentionally excluded from version control. See the [screenshot evidence index](docs/screenshots/README.md).
 
 ## Quick start
 
-Prerequisites: Docker Desktop and Docker Compose.
+### Prerequisites
+
+- Docker Desktop with Docker Compose
+- Python 3.11+ (only for serving the second-origin demo page)
+- Node.js 20+ and npm (only for the React dashboard)
+
+### 1. Start the backend and database
 
 ```powershell
 git clone https://github.com/SaraArif6198/flyrank-capstone-widgetforge-.git
@@ -56,17 +126,11 @@ cd flyrank-capstone-widgetforge-
 Copy-Item .env.example .env
 docker compose up --build -d
 docker compose exec api python scripts/seed_demo.py
-docker compose exec api python -m unittest discover -s tests -v
 ```
 
-Open these URLs after startup:
+The API is available at `http://localhost:8000/docs`. PostgreSQL is intentionally internal to Docker—there is no host `5432` mapping to conflict with a local database.
 
-- API documentation: `http://localhost:8000/docs`
-- Health check: `http://localhost:8000/health`
-
-### Owner dashboard UI
-
-In a second terminal, start the React dashboard:
+### 2. Start the owner dashboard
 
 ```powershell
 cd frontend
@@ -74,108 +138,93 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-Open `http://localhost:5173`. The UI uses Vite's local API proxy, so it works with the Dockerized API without exposing a new CORS policy. The current owner UI includes real login, dashboard metrics, widget listing/creation, copyable installation snippets, and a tenant-safe submissions table.
+Open `http://localhost:5173` and sign in with:
 
-The Compose database is intentionally **not** mapped to host port 5432. The API reaches it safely through Docker’s internal network, avoiding conflicts with local PostgreSQL instances.
+| Email | Password |
+|---|---|
+| `alice@acme.test` | `DemoPass123!` |
 
-### Demo credentials
+### 3. Test the customer-site embed
 
-| Tenant | Email | Password |
-|---|---|---|
-| Acme Labs | `alice@acme.test` | `DemoPass123!` |
-| Beta Studio | `bob@beta.test` | `DemoPass123!` |
-
-These are deterministic local demo credentials only.
-
-## Run the embed demo
-
-1. Use `/docs` to log in as Alice and call `GET /api/v1/widgets`.
-2. Copy the returned widget `public_id`.
-3. Replace `REPLACE_WITH_PUBLIC_ID` in `customer-site/index.html`.
-4. In a second terminal, run:
+1. In the dashboard, open **Widgets** and click **Copy snippet**.
+2. Replace the script tag in `customer-site/index.html` with the copied snippet.
+3. From the repository root, run:
 
    ```powershell
    python -m http.server 8080 --directory customer-site
    ```
 
-5. Open `http://localhost:8080`, submit the form, then call `GET /api/v1/submissions` and `GET /api/v1/dashboard/summary` in Swagger.
+4. Open `http://localhost:8080`, submit the form, then return to **Submissions** in the dashboard.
 
-For the complete six-minute acceptance walkthrough, see [DEMO.md](DEMO.md).
+For the evaluator-ready walkthrough, see [DEMO.md](DEMO.md).
 
 ## API surface
 
-| Route | Purpose |
+| Route | Description |
 |---|---|
-| `POST /api/v1/auth/login` | Get owner JWT. |
-| `POST/GET /api/v1/widgets` | Create and list tenant-owned widgets. |
-| `GET/PATCH/DELETE /api/v1/widgets/{id}` | Manage one tenant-owned widget. |
-| `GET /api/v1/widgets/{id}/embed` | Generate installation snippet. |
-| `GET /widget.v1.js` | Serve immutable versioned widget bundle. |
-| `GET /public/v1/widgets/{public_id}/config` | Serve cacheable public configuration. |
-| `POST /public/v1/submissions` | Hardened public lead capture. |
-| `GET /api/v1/submissions` | List tenant-only leads. |
-| `GET /api/v1/dashboard/summary` | Read tenant-only aggregate metrics. |
+| `POST /api/v1/auth/login` | Authenticate owner and return JWT. |
+| `GET/POST /api/v1/widgets` | List/create tenant-owned widgets. |
+| `GET/PATCH/DELETE /api/v1/widgets/{id}` | Read/update/deactivate a widget. |
+| `GET /api/v1/widgets/{id}/embed` | Return the one-line install snippet. |
+| `GET /public/v1/widgets/{public_id}/config` | Return cacheable safe rendering config. |
+| `POST /public/v1/submissions` | Accept a protected public lead submission. |
+| `GET /api/v1/submissions` | List authenticated tenant submissions. |
+| `GET /api/v1/dashboard/summary` | Read owner metrics and aggregates. |
 
-See the detailed [API contract](docs/API_CONTRACT.md) and interactive OpenAPI docs at `/docs`.
+Interactive OpenAPI documentation is available at `/docs`; the complete contract is in [docs/API_CONTRACT.md](docs/API_CONTRACT.md).
 
-## Verification and evidence
+## Verification
+
+Run the backend suite inside its actual Docker environment:
 
 ```powershell
 docker compose exec api python -m unittest discover -s tests -v
 ```
 
-The Dockerized suite passes **7/7 tests**. It proves:
+**7/7 automated tests pass.** They cover:
 
-- Tenant B cannot read, update, or delete Tenant A’s widget or view Tenant A’s dashboard data.
-- Invalid widget schemas return structured `422` errors.
-- The public config is CORS-enabled, short-cacheable, and returns `304` on ETag revalidation.
-- Submission retries with the same idempotency key return the same lead ID.
-- Honeypot and rate-limiting controls behave as designed.
-- Primary geo failure uses the fallback; total geo failure still stores the lead.
-- Notification failure leaves the accepted submission committed and creates a retriable outbox event.
+- Tenant A / Tenant B authorization isolation
+- Widget CRUD validation errors
+- CORS headers, preflight, cache headers, and ETag `304`
+- Public submission idempotency
+- Honeypot and rate-limit behaviour
+- Geo fallback and both-providers-down degradation
+- Notification failure isolation and outbox retry state
+- Dashboard isolation
 
-## Live proof
+Build the frontend independently:
 
-### Authenticated widget configuration
+```powershell
+cd frontend
+npm.cmd run build
+```
 
-The owner API returns the configured form definition and an opaque public widget ID.
+## Security and engineering decisions
 
-<p align="center">
-  <img src="docs/screenshots/widget-api-response.png" alt="Widget configuration returned from the authenticated API" width="760">
-</p>
+- No client-supplied tenant ID is trusted.
+- `.env`, local database files, JWT-bearing screenshots, and personal-data screenshots are gitignored.
+- Public config never exposes owner identity, secrets, or lead data.
+- The widget uses safe DOM APIs and does not inject untrusted HTML.
+- External enrichment and notification failures are non-critical by design.
+- The initial rate limiter is intentionally local-process only; Redis/API gateway replacement is documented as a production extension.
 
-### Cross-origin widget delivery
+## Documentation
 
-The widget bundle renders on a customer page served from a different origin.
-
-<p align="center">
-  <img src="docs/screenshots/cross-origin-widget-loaded.png" alt="Embeddable widget loaded on second-origin customer site" width="700">
-</p>
-
-### Successful public lead capture
-
-The visitor submits configured fields and receives a safe confirmation response.
-
-<p align="center">
-  <img src="docs/screenshots/submission-success.png" alt="Successful embeddable widget submission" width="700">
-</p>
-
-Bearer-token screenshots are intentionally excluded from version control. The [screenshot evidence index](docs/screenshots/README.md) documents the safe public images.
-
-## Design and engineering notes
-
-- [Product requirements document](docs/PRD.md)
-- [Architecture and request flows](docs/ARCHITECTURE.md)
+- [Product requirements](docs/PRD.md)
+- [Architecture](docs/ARCHITECTURE.md)
 - [Data model](docs/DATA_MODEL.md)
-- [Security and resilience plan](docs/SECURITY.md)
+- [API contract](docs/API_CONTRACT.md)
+- [Security & resilience](docs/SECURITY.md)
 - [Test strategy](docs/TEST_STRATEGY.md)
-- [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
-- [Architecture decision records](docs/adr/)
-- [Portfolio positioning and extension roadmap](docs/PORTFOLIO.md)
+- [Backend implementation plan](docs/IMPLEMENTATION_PLAN.md)
 - [UI implementation plan](docs/UI_IMPLEMENTATION_PLAN.md)
+- [Portfolio roadmap](docs/PORTFOLIO.md)
+- [Architecture decision records](docs/adr/)
 
 ## Limitations and next steps
 
-This is a local-first capstone, not a production-hosted service. The in-memory rate limiter applies to one API process; production deployment should replace it with Redis, an API gateway, or a WAF. The geo providers are deterministic fakes in tests; real provider adapters need operational rate-limit/retention review. Privacy compliance, user-managed allowed origins, audit logging, observability metrics, signed webhooks, and a dedicated worker process are deliberate next-step enhancements.
+WidgetForge is a local-first portfolio capstone. It is not a production deployment or privacy-compliance certification. The most valuable next improvements are Redis-backed rate limiting, structured observability/correlation IDs, user-managed allowed origins, signed webhook delivery, and a separately deployed notification worker.
 
-The best portfolio extension is structured observability: request correlation IDs, JSON logs, readiness checks, and counters for accepted/rejected/fallback/failed-notification events.
+---
+
+Built as a FlyRank Backend Engineering capstone. The UI exists to make the backend guarantees visible—not to hide them.
