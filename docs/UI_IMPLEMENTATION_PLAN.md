@@ -139,13 +139,13 @@ frontend/
 
 ## Delivery phases
 
-### Phase 1 — shell and authentication (2–3 hours)
+### Phase 1 — shell and authentication (2–3 hours) — **Complete**
 
 1. Scaffold Vite React TypeScript app, tokens, router, navigation, and protected route.
 2. Build login/logout and API client.
 3. Verify invalid/expired token handling.
 
-**Gate:** owner can log in with real API and reach a protected dashboard shell.
+**Gate:** owner can log in with real API and reach a protected dashboard shell. The Vite production build passes and the development server responds on `http://localhost:5173`.
 
 ### Phase 2 — dashboard and widget management (5–7 hours)
 

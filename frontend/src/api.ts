@@ -1,0 +1,30 @@
+export type LoginResponse = { access_token: string; token_type: string };
+
+const TOKEN_KEY = "widgetforge_access_token";
+
+export const session = {
+  get: () => sessionStorage.getItem(TOKEN_KEY),
+  set: (token: string) => sessionStorage.setItem(TOKEN_KEY, token),
+  clear: () => sessionStorage.removeItem(TOKEN_KEY),
+};
+
+export async function login(email: string, password: string): Promise<LoginResponse> {
+  const response = await fetch("/api/v1/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) throw new Error("The email or password is incorrect.");
+  return response.json();
+}
+
+export async function api<T>(path: string): Promise<T> {
+  const token = session.get();
+  const response = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (response.status === 401) {
+    session.clear();
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+  if (!response.ok) throw new Error("We could not load this information. Please try again.");
+  return response.json();
+}

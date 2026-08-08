@@ -64,6 +64,18 @@ Open these URLs after startup:
 - API documentation: `http://localhost:8000/docs`
 - Health check: `http://localhost:8000/health`
 
+### Owner dashboard UI
+
+In a second terminal, start the React dashboard:
+
+```powershell
+cd frontend
+npm.cmd install
+npm.cmd run dev
+```
+
+Open `http://localhost:5173`. The UI uses Vite's local API proxy, so it works with the Dockerized API without exposing a new CORS policy. UI Phase 1 currently includes the real login flow and protected dashboard overview; widget editing and submissions screens follow in Phase 2.
+
 The Compose database is intentionally **not** mapped to host port 5432. The API reaches it safely through Docker’s internal network, avoiding conflicts with local PostgreSQL instances.
 
 ### Demo credentials
