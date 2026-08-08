@@ -74,7 +74,7 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-Open `http://localhost:5173`. The UI uses Vite's local API proxy, so it works with the Dockerized API without exposing a new CORS policy. UI Phase 1 currently includes the real login flow and protected dashboard overview; widget editing and submissions screens follow in Phase 2.
+Open `http://localhost:5173`. The UI uses Vite's local API proxy, so it works with the Dockerized API without exposing a new CORS policy. The current owner UI includes real login, dashboard metrics, widget listing/creation, copyable installation snippets, and a tenant-safe submissions table.
 
 The Compose database is intentionally **not** mapped to host port 5432. The API reaches it safely through Docker’s internal network, avoiding conflicts with local PostgreSQL instances.
 

@@ -1,48 +1,43 @@
-import React, { FormEvent, useState } from "react";
+import React, { FormEvent, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
-import { api, login, session } from "./api";
+import { api, login, request, session } from "./api";
 import "./styles.css";
 
 type Summary = { total_submissions: number; by_widget: { widget_id: string; title: string; count: number }[]; by_country: { country: string; count: number }[] };
+type Widget = { id: string; public_id: string; widget_type: "signup" | "contact"; title: string; description?: string; form_fields: Field[]; button_text: string; is_active: boolean; config_version: number };
+type Field = { name: string; label: string; type: "text" | "email"; required: boolean; max_length: number };
+type Submission = { id: string; widget_id: string; payload: Record<string, string>; geo_country?: string; geo_city?: string; created_at: string };
 
-function LoginPage() {
-  const [email, setEmail] = useState("alice@acme.test");
-  const [password, setPassword] = useState("DemoPass123!");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const navigate = useNavigate();
-  async function submit(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setError("");
-    try { const result = await login(email, password); session.set(result.access_token); navigate("/dashboard"); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Sign-in failed."); }
-    finally { setBusy(false); }
-  }
-  return <main className="login-shell"><section className="login-card" aria-labelledby="login-title">
-    <div className="wordmark">WidgetForge</div><h1 id="login-title">Welcome back</h1>
-    <p>Manage the forms you embed and the leads they collect.</p>
-    <form onSubmit={submit} noValidate><label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" /></label>
-      <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" /></label>
-      {error && <p className="form-error" role="alert">{error}</p>}<button className="button primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
-    </form><p className="demo-note">Local demo credentials are prefilled.</p>
-  </section></main>;
+const defaultFields: Field[] = [{ name: "email", label: "Work email", type: "email", required: true, max_length: 254 }, { name: "name", label: "Name", type: "text", required: false, max_length: 120 }];
+
+function LoginPage() { const [email, setEmail] = useState("alice@acme.test"), [password, setPassword] = useState("DemoPass123!"), [error, setError] = useState(""), [busy, setBusy] = useState(false); const navigate = useNavigate();
+  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setError(""); try { const result = await login(email, password); session.set(result.access_token); navigate("/dashboard"); } catch (e) { setError(e instanceof Error ? e.message : "Sign-in failed."); } finally { setBusy(false); } }
+  return <main className="login-shell"><section className="login-card" aria-labelledby="login-title"><div className="wordmark">WidgetForge</div><h1 id="login-title">Welcome back</h1><p>Manage the forms you embed and the leads they collect.</p><form onSubmit={submit}><label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label><label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="button primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button></form><p className="demo-note">Local demo credentials are prefilled.</p></section></main>;
 }
 
-function Dashboard() {
-  const [summary, setSummary] = useState<Summary | null>(null); const [error, setError] = useState("");
-  React.useEffect(() => { api<Summary>("/api/v1/dashboard/summary").then(setSummary).catch(e => setError(e.message)); }, []);
-  if (error) return <section className="page"><h1>Dashboard</h1><p className="form-error">{error}</p></section>;
-  if (!summary) return <section className="page"><p className="muted">Loading dashboard…</p></section>;
-  const topCountry = summary.by_country[0]?.country ?? "No data";
-  return <section className="page"><div className="page-heading"><div><p className="eyebrow">Overview</p><h1>Good morning</h1><p>Here is what your embedded forms have captured.</p></div><NavLink className="button primary" to="/widgets/new">Create widget</NavLink></div>
-    <div className="metrics"><Metric label="Total submissions" value={summary.total_submissions} /><Metric label="Configured widgets" value={summary.by_widget.length} /><Metric label="Top country" value={topCountry} /></div>
-    <section className="panel"><div className="panel-heading"><h2>Widget performance</h2><NavLink to="/widgets">View all widgets</NavLink></div>
-      {summary.by_widget.length ? <table><thead><tr><th>Widget</th><th>Leads</th></tr></thead><tbody>{summary.by_widget.map(item => <tr key={item.widget_id}><td>{item.title}</td><td>{item.count}</td></tr>)}</tbody></table> : <p className="empty">Create a widget to start collecting leads.</p>}</section>
-  </section>;
-}
+function useLoad<T>(path: string) { const [data, setData] = useState<T | null>(null), [error, setError] = useState(""); useEffect(() => { api<T>(path).then(setData).catch(e => setError(e.message)); }, [path]); return { data, error }; }
 function Metric({ label, value }: { label: string; value: string | number }) { return <article className="metric"><p>{label}</p><strong>{value}</strong></article>; }
-function Shell() { const navigate = useNavigate(); function logout() { session.clear(); navigate("/login"); }
-  return <div className="app-shell"><aside><div className="wordmark">WidgetForge</div><nav><NavLink to="/dashboard">Overview</NavLink><NavLink to="/widgets">Widgets</NavLink><NavLink to="/submissions">Submissions</NavLink></nav><button className="logout" onClick={logout}>Sign out</button></aside><main className="content"><Routes><Route path="/dashboard" element={<Dashboard />} /><Route path="*" element={<section className="page"><h1>Coming next</h1><p>This screen is planned for UI Phase 2.</p></section>} /></Routes></main></div>; }
+function LoadState({ error }: { error: string }) { return <section className="page">{error ? <p className="form-error">{error}</p> : <p className="muted">Loading…</p>}</section>; }
+
+function Dashboard() { const { data: summary, error } = useLoad<Summary>("/api/v1/dashboard/summary"); if (!summary) return <LoadState error={error} />; const topCountry = summary.by_country[0]?.country ?? "No data";
+  return <section className="page"><div className="page-heading"><div><p className="eyebrow">Overview</p><h1>Good morning</h1><p>Here is what your embedded forms have captured.</p></div><NavLink className="button primary" to="/widgets/new">Create widget</NavLink></div><div className="metrics"><Metric label="Total submissions" value={summary.total_submissions} /><Metric label="Configured widgets" value={summary.by_widget.length} /><Metric label="Top country" value={topCountry} /></div><section className="panel"><div className="panel-heading"><h2>Widget performance</h2><NavLink to="/widgets">View all widgets</NavLink></div>{summary.by_widget.length ? <table><thead><tr><th>Widget</th><th>Leads</th></tr></thead><tbody>{summary.by_widget.map(item => <tr key={item.widget_id}><td>{item.title}</td><td>{item.count}</td></tr>)}</tbody></table> : <p className="empty">Create a widget to start collecting leads.</p>}</section></section>;
+}
+
+function WidgetsPage() { const { data: widgets, error } = useLoad<Widget[]>("/api/v1/widgets"); const [copied, setCopied] = useState(""); if (!widgets) return <LoadState error={error} />;
+  async function copySnippet(widget: Widget) { const embed = await api<{ snippet: string }>(`/api/v1/widgets/${widget.id}/embed`); await navigator.clipboard.writeText(embed.snippet); setCopied(widget.id); setTimeout(() => setCopied(""), 1800); }
+  return <section className="page"><div className="page-heading"><div><p className="eyebrow">Forms</p><h1>Widgets</h1><p>Create a form once and embed it anywhere.</p></div><NavLink className="button primary" to="/widgets/new">Create widget</NavLink></div><section className="panel">{widgets.length ? <table><thead><tr><th>Widget</th><th>Type</th><th>Status</th><th>Install</th></tr></thead><tbody>{widgets.map(w => <tr key={w.id}><td><strong>{w.title}</strong><br /><span className="muted">{w.form_fields.length} fields</span></td><td>{w.widget_type}</td><td><span className={w.is_active ? "badge active" : "badge"}>{w.is_active ? "Active" : "Inactive"}</span></td><td><button className="button secondary" onClick={() => copySnippet(w)}>{copied === w.id ? "Copied" : "Copy snippet"}</button></td></tr>)}</tbody></table> : <div className="empty-block"><h2>No widgets yet</h2><p>Create your first embeddable lead form.</p><NavLink className="button primary" to="/widgets/new">Create widget</NavLink></div>}</section></section>;
+}
+
+function WidgetEditor() { const navigate = useNavigate(); const [title, setTitle] = useState(""), [description, setDescription] = useState(""), [type, setType] = useState<"signup" | "contact">("signup"), [buttonText, setButtonText] = useState("Subscribe"), [fields, setFields] = useState<Field[]>(defaultFields), [error, setError] = useState(""), [saving, setSaving] = useState(false);
+  function updateField(index: number, key: keyof Field, value: string | boolean | number) { setFields(current => current.map((field, i) => i === index ? { ...field, [key]: value } : field)); }
+  async function save(event: FormEvent) { event.preventDefault(); setSaving(true); setError(""); try { const widget = await request<Widget>("/api/v1/widgets", { method: "POST", body: JSON.stringify({ widget_type: type, title, description: description || null, form_fields: fields, button_text: buttonText, display_options: {} }) }); navigate("/widgets", { state: { created: widget.id } }); } catch (e) { setError(e instanceof Error ? e.message : "Could not save this widget."); } finally { setSaving(false); } }
+  return <section className="page"><div className="page-heading"><div><p className="eyebrow">New form</p><h1>Create widget</h1><p>Start with a simple, focused lead form.</p></div></div><form className="editor panel" onSubmit={save}><div className="form-grid"><label>Widget type<select value={type} onChange={e => setType(e.target.value as "signup" | "contact")}><option value="signup">Signup</option><option value="contact">Contact</option></select></label><label>Title<input value={title} onChange={e => setTitle(e.target.value)} required maxLength={160} placeholder="Get product updates" /></label><label className="full">Description (optional)<textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={1000} placeholder="A short explanation for visitors." /></label><label>Button text<input value={buttonText} onChange={e => setButtonText(e.target.value)} required maxLength={80} /></label></div><div className="field-editor"><div className="panel-heading"><h2>Fields</h2><button type="button" className="button secondary" disabled={fields.length >= 8} onClick={() => setFields([...fields, { name: "message", label: "Message", type: "text", required: false, max_length: 240 }])}>Add field</button></div>{fields.map((field, index) => <div className="field-row" key={`${field.name}-${index}`}><input aria-label="Field name" value={field.name} onChange={e => updateField(index, "name", e.target.value)} /><input aria-label="Field label" value={field.label} onChange={e => updateField(index, "label", e.target.value)} /><select aria-label="Field type" value={field.type} onChange={e => updateField(index, "type", e.target.value as "text" | "email")}><option value="text">Text</option><option value="email">Email</option></select><label className="check"><input type="checkbox" checked={field.required} onChange={e => updateField(index, "required", e.target.checked)} /> Required</label><button type="button" className="text-button" disabled={fields.length === 1} onClick={() => setFields(fields.filter((_, i) => i !== index))}>Remove</button></div>)}</div>{error && <p className="form-error">{error}</p>}<div className="form-actions"><NavLink className="button secondary" to="/widgets">Cancel</NavLink><button className="button primary" disabled={saving}>{saving ? "Saving…" : "Create widget"}</button></div></form></section>;
+}
+
+function SubmissionsPage() { const { data: submissions, error } = useLoad<Submission[]>("/api/v1/submissions"); if (!submissions) return <LoadState error={error} />; return <section className="page"><div className="page-heading"><div><p className="eyebrow">Leads</p><h1>Submissions</h1><p>Recent data captured by your widgets.</p></div></div><section className="panel">{submissions.length ? <table><thead><tr><th>Submitted</th><th>Contact</th><th>Location</th></tr></thead><tbody>{submissions.map(s => <tr key={s.id}><td>{new Date(s.created_at).toLocaleString()}</td><td><strong>{s.payload.name || "—"}</strong><br /><span className="muted">{s.payload.email || "No email"}</span></td><td>{s.geo_city ? `${s.geo_city}, ` : ""}{s.geo_country || "Unknown"}</td></tr>)}</tbody></table> : <div className="empty-block"><h2>No submissions yet</h2><p>Install a widget and submit the form from your customer site.</p></div>}</section></section>; }
+
+function Shell() { const navigate = useNavigate(); function logout() { session.clear(); navigate("/login"); } return <div className="app-shell"><aside><div className="wordmark">WidgetForge</div><nav><NavLink to="/dashboard">Overview</NavLink><NavLink to="/widgets">Widgets</NavLink><NavLink to="/submissions">Submissions</NavLink></nav><button className="logout" onClick={logout}>Sign out</button></aside><main className="content"><Routes><Route path="/dashboard" element={<Dashboard />} /><Route path="/widgets" element={<WidgetsPage />} /><Route path="/widgets/new" element={<WidgetEditor />} /><Route path="/submissions" element={<SubmissionsPage />} /><Route path="*" element={<Navigate to="/dashboard" replace />} /></Routes></main></div>; }
 function Protected() { return session.get() ? <Shell /> : <Navigate to="/login" replace />; }
 function App() { return <Routes><Route path="/login" element={session.get() ? <Navigate to="/dashboard" replace /> : <LoginPage />} /><Route path="/*" element={<Protected />} /></Routes>; }
 createRoot(document.getElementById("root")!).render(<React.StrictMode><BrowserRouter><App /></BrowserRouter></React.StrictMode>);

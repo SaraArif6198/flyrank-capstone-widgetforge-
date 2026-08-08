@@ -147,13 +147,13 @@ frontend/
 
 **Gate:** owner can log in with real API and reach a protected dashboard shell. The Vite production build passes and the development server responds on `http://localhost:5173`.
 
-### Phase 2 — dashboard and widget management (5–7 hours)
+### Phase 2 — dashboard and widget management (5–7 hours) — **Complete**
 
 1. Build summary cards, widget list, and submissions table.
 2. Build create/edit widget form with API validation mapping.
 3. Build copy-snippet install panel.
 
-**Gate:** owner creates a widget through UI, copies snippet, submits a browser lead, and sees it in dashboard.
+**Gate:** owner creates a widget through UI, copies a real API-generated snippet, submits a browser lead, and sees it in the dashboard. The frontend production build passes.
 
 ### Phase 3 — embed polish (3–4 hours)
 
