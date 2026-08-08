@@ -155,13 +155,13 @@ frontend/
 
 **Gate:** owner creates a widget through UI, copies a real API-generated snippet, submits a browser lead, and sees it in the dashboard. The frontend production build passes.
 
-### Phase 3 — embed polish (3–4 hours)
+### Phase 3 — embed polish (3–4 hours) — **In progress**
 
 1. Apply isolated widget styling.
 2. Add validation, submitting, success, and error states.
 3. Verify host-CSS collision resistance and keyboard use.
 
-**Gate:** polished second-origin widget works while the existing backend suite remains green.
+**Gate:** polished second-origin widget works while the existing backend suite remains green. Scoped styling, client-side feedback, loading/submitting/success/error states, and retry-safe idempotency-key handling are implemented; Docker image rebuild verification is pending.
 
 ### Phase 4 — proof and quality (2–3 hours)
 
