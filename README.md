@@ -84,6 +84,18 @@ The application is intentionally a **modular monolith**: route, service, reposit
 
 ## Live proof
 
+### Backend API and authentication
+
+The owner API is protected by bearer authentication and returns the configured widget model, including the opaque public ID used by the install snippet. Swagger masks the active authorization value; no JWT is published in this repository.
+
+<p align="center">
+  <img src="docs/screenshots/swagger-authorized.png" alt="Swagger UI authenticated with WidgetForge owner bearer token" width="500" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/widget-api-response.png" alt="Authenticated WidgetForge API returning widget configuration and public ID" width="900" />
+</p>
+
 ### Owner dashboard
 
 The dashboard displays tenant-scoped metrics and widget performance.
