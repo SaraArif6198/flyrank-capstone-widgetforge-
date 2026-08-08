@@ -76,7 +76,9 @@ class BrowserEmbedTests(unittest.TestCase):
             page.locator('input[name="email"]').fill("browser@example.com")
             page.locator(".wf-button").click()
             confirmation = page.get_by_text("Your submission was received.")
-            if not confirmation.is_visible(timeout=5_000):
+            try:
+                confirmation.wait_for(state="visible", timeout=10_000)
+            except Exception:
                 root_text = page.locator("[data-widgetforge-root]").inner_text()
                 browser.close()
                 self.fail(f"Submission confirmation did not render: {root_text}; console={console_errors}; error_responses={error_responses}")
