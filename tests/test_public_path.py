@@ -44,12 +44,22 @@ class PublicPathTests(unittest.TestCase):
         config = self.client.get(f"/public/v1/widgets/{self.widget.public_id}/config", headers={"Origin": "http://localhost:8080"})
         self.assertEqual(config.status_code, 200); self.assertIn("max-age=300", config.headers["cache-control"])
         self.assertEqual(config.headers["access-control-allow-origin"], "http://localhost:8080")
+        bundle = self.client.get("/widget.v1.js")
+        self.assertEqual(bundle.status_code, 200)
+        self.assertEqual(bundle.headers["cache-control"], "public, max-age=31536000, immutable")
         self.assertEqual(self.client.get(f"/public/v1/widgets/{self.widget.public_id}/config", headers={"If-None-Match": config.headers["etag"]}).status_code, 304)
         payload, headers = self.payload()
         first = self.client.post("/public/v1/submissions", json=payload, headers=headers)
         replay = self.client.post("/public/v1/submissions", json=payload, headers=headers)
         self.assertEqual(first.status_code, 201); self.assertFalse(first.json()["replayed"])
         self.assertEqual(replay.json()["id"], first.json()["id"]); self.assertTrue(replay.json()["replayed"])
+
+    def test_oversized_submission_returns_413(self):
+        payload, headers = self.payload("00000000-0000-0000-0000-000000000050")
+        payload["fields"]["name"] = "x" * 20_000
+        response = self.client.post("/public/v1/submissions", json=payload, headers=headers)
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.json()["error"]["code"], "payload_too_large")
 
     def test_preflight_and_both_geo_providers_down(self):
         preflight = self.client.options("/public/v1/submissions", headers={"Origin": "http://localhost:8080", "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type,idempotency-key"})

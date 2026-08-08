@@ -39,8 +39,18 @@ def dashboard_summary(user: CurrentUser = Depends(get_current_user), db: Session
         .group_by(Submission.geo_country)
         .order_by(func.count(Submission.id).desc())
     ).all()
+    # SQLAlchemy renders a portable date expression for both the SQLite test
+    # database and PostgreSQL used by Compose.
+    day = func.date(Submission.created_at)
+    over_time_rows = db.execute(
+        select(day.label("day"), func.count(Submission.id).label("count"))
+        .where(Submission.tenant_id == user.tenant_id)
+        .group_by(day)
+        .order_by(day)
+    ).all()
     return DashboardSummary(
         total_submissions=total,
         by_widget=[{"widget_id": row.id, "title": row.title, "count": row.count} for row in by_widget_rows],
         by_country=[{"country": row.geo_country or "Unknown", "count": row.count} for row in by_country_rows],
+        submissions_over_time=[{"date": str(row.day), "count": row.count} for row in over_time_rows],
     )

@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     ip_hash_secret: str = "development-ip-hash-secret"
     notifier_mode: str = "console"
+    geo_enrichment_enabled: bool = False
+    geo_request_timeout_seconds: float = 1.5
+    outbox_poll_seconds: float = 2.0
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

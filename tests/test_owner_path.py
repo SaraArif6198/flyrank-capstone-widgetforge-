@@ -68,6 +68,7 @@ class OwnerPathTests(unittest.TestCase):
         self.assertEqual(alice_summary.status_code, 200)
         self.assertEqual(bob_summary.status_code, 200)
         self.assertGreaterEqual(alice_summary.json()["total_submissions"], 0)
+        self.assertIn("submissions_over_time", alice_summary.json())
         self.assertEqual(bob_summary.json()["total_submissions"], 0)
         self.assertEqual(self.client.get("/api/v1/submissions", headers=bob_headers).json(), [])
 

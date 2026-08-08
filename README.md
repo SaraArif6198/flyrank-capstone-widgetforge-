@@ -8,7 +8,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)](https://react.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-![Tests](https://img.shields.io/badge/backend%20tests-7%2F7%20passing-16803A)
+![Tests](https://img.shields.io/badge/backend%20tests-9%2F9%20passing-16803A)
 ![Status](https://img.shields.io/badge/status-local--first%20capstone-4055A8)
 
 **[Quick start](#quick-start)** · **[Live proof](#live-proof)** · **[Architecture](#architecture)** · **[API](#api-surface)** · **[Documentation](#documentation)**
@@ -80,7 +80,7 @@ The application is intentionally a **modular monolith**: route, service, reposit
 | Persistence | PostgreSQL, SQLAlchemy |
 | Authentication | JWT bearer tokens, Passlib/bcrypt password hashing |
 | Local platform | Docker Compose |
-| Verification | `unittest`, deterministic fakes for geo and notification dependencies |
+| Verification | `unittest`, Playwright browser proof, deterministic dependency fakes, GitHub Actions |
 
 ## Live proof
 
@@ -193,16 +193,20 @@ Run the backend suite inside its actual Docker environment:
 docker compose exec api python -m unittest discover -s tests -v
 ```
 
-**7/7 automated tests pass.** They cover:
+The backend suite and a separate Chromium-based second-origin proof cover:
 
 - Tenant A / Tenant B authorization isolation
 - Widget CRUD validation errors
 - CORS headers, preflight, cache headers, and ETag `304`
+- Immutable caching for the versioned browser bundle and oversized-request `413`
 - Public submission idempotency
 - Honeypot and rate-limit behaviour
 - Geo fallback and both-providers-down degradation
 - Notification failure isolation and outbox retry state
 - Dashboard isolation
+- Real browser rendering and submission from a customer-site origin (in CI)
+
+Schema changes are managed by **Alembic**. Docker Compose runs the one-shot `migrate` service before the API and a separate continuously running `worker` processes durable notification events.
 
 Build the frontend independently:
 
@@ -231,6 +235,8 @@ npm.cmd run build
 - [Backend implementation plan](docs/IMPLEMENTATION_PLAN.md)
 - [UI implementation plan](docs/UI_IMPLEMENTATION_PLAN.md)
 - [Portfolio roadmap](docs/PORTFOLIO.md)
+- [Evaluator evidence](EVIDENCE.md)
+- [Build log](BUILDLOG.md)
 - [Architecture decision records](docs/adr/)
 
 ## Limitations and next steps

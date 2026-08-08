@@ -8,7 +8,6 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api import auth, dashboard, public, widgets
 from app.core.config import get_settings
-from app.db.session import Base, engine
 
 
 def error_response(status_code: int, code: str, message: str, details=None) -> JSONResponse:
@@ -20,8 +19,7 @@ def error_response(status_code: int, code: str, message: str, details=None) -> J
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # Development convenience. Production boot should run Alembic migrations first.
-    Base.metadata.create_all(bind=engine)
+    # Schema changes are applied by the dedicated Alembic migration service.
     yield
 
 
@@ -31,7 +29,6 @@ app.include_router(auth.router)
 app.include_router(widgets.router)
 app.include_router(public.router)
 app.include_router(dashboard.router)
-app.mount("/", StaticFiles(directory="app/static", html=False), name="static")
 
 
 @app.middleware("http")
@@ -40,7 +37,10 @@ async def limit_public_submission_size(request: Request, call_next):
         length = request.headers.get("content-length")
         if length and int(length) > get_settings().max_submission_bytes:
             return error_response(413, "payload_too_large", "Request body is too large")
-    return await call_next(request)
+    response = await call_next(request)
+    if request.url.path == "/widget.v1.js":
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
 @app.exception_handler(RequestValidationError)
@@ -66,3 +66,6 @@ async def route_not_found(_: Request, __):
 @app.get("/health", tags=["operations"])
 def health():
     return {"status": "ok", "service": "widgetforge", "phase": "owner-path"}
+
+
+app.mount("/", StaticFiles(directory="app/static", html=False), name="static")

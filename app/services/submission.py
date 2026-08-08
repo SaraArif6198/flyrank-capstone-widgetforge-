@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.models import OutboxEvent, Submission, Widget
-from app.integrations.geo import GeoProvider, NullGeoProvider, resolve_geo
+from app.integrations.geo import GeoProvider, configured_geo_providers, resolve_geo
 
 
 class InMemoryRateLimiter:
@@ -71,7 +71,7 @@ def accept_submission(db: Session, *, public_id: str, fields: dict, honeypot: st
     if existing:
         return existing, True
     payload = validate_fields(widget, fields)
-    geo = resolve_geo(ip, geo_providers or [NullGeoProvider()])
+    geo = resolve_geo(ip, geo_providers if geo_providers is not None else configured_geo_providers())
     submission = Submission(tenant_id=widget.tenant_id, widget_id=widget.id, idempotency_key=idempotency_key, payload=payload, source_origin=origin, ip_hash=hash_ip(ip), geo_country=geo.country if geo else None, geo_city=geo.city if geo else None, geo_provider=geo.provider if geo else None)
     db.add(submission)
     db.flush()

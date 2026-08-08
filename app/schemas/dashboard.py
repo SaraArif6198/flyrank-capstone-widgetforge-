@@ -19,3 +19,4 @@ class DashboardSummary(BaseModel):
     total_submissions: int
     by_widget: list[dict[str, Any]]
     by_country: list[dict[str, Any]]
+    submissions_over_time: list[dict[str, Any]]

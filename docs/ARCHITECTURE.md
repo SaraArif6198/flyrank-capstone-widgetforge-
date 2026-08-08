@@ -67,3 +67,12 @@ Preflight/CORS → payload cap → validation → rate limit → honeypot → id
 ## Architecture validation
 
 Architecture is considered successful when routes can be tested with fake providers, database queries never leak cross-tenant records, and the worker can fail without changing a previously returned successful submission response.
+# Architecture
+
+## Runtime services
+
+Docker Compose runs four cooperating services: PostgreSQL, a one-shot Alembic `migrate` job, the FastAPI `api`, and a restartable `worker`. API and worker startup are gated on successful schema migration. The worker polls the transactional outbox and retries failed notifications without blocking public lead capture.
+
+## Enrichment and analytics
+
+Geo enrichment is opt-in (`GEO_ENRICHMENT_ENABLED=true`) and uses ip-api followed by ipwho.is. Either provider can fail without rejecting a submission. Dashboard summaries include totals, per-widget/country aggregates, and a date-grouped submissions-over-time series.
