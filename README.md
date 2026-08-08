@@ -160,6 +160,7 @@ Bearer-token screenshots are intentionally excluded from version control. The [s
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 - [Architecture decision records](docs/adr/)
 - [Portfolio positioning and extension roadmap](docs/PORTFOLIO.md)
+- [UI implementation plan](docs/UI_IMPLEMENTATION_PLAN.md)
 
 ## Limitations and next steps
 
