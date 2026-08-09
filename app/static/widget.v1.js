@@ -28,10 +28,32 @@
     return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
   }
 
+  function analyticsSession() {
+    const key = `widgetforge-session-${widgetId}`;
+    try {
+      const existing = sessionStorage.getItem(key);
+      if (existing) return existing;
+      const created = createKey(); sessionStorage.setItem(key, created); return created;
+    } catch (_) { return createKey(); }
+  }
+
+  const sessionId = analyticsSession();
+  function track(eventType) {
+    fetch(`${apiBase}/public/v1/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ widget_id: widgetId, event_type: eventType, session_id: sessionId }),
+      keepalive: true,
+    }).catch(() => {});
+  }
+
   fetch(`${apiBase}/public/v1/widgets/${widgetId}/config`)
     .then(response => response.ok ? response.json() : Promise.reject())
     .then(config => {
+      track("widget_viewed");
       const card = document.createElement("div"); card.className = "wf-card";
+      const appearance = config.display_options || {};
+      card.style.borderRadius = `${appearance.border_radius ?? 8}px`;
       const title = document.createElement("h2"); title.className = "wf-title"; title.textContent = config.title; card.append(title);
       if (config.description) { const description = document.createElement("p"); description.className = "wf-description"; description.textContent = config.description; card.append(description); }
       const form = document.createElement("form"); form.className = "wf-form"; form.noValidate = true;
@@ -43,9 +65,10 @@
         label.append(input, error); form.append(label); fields.set(definition.name, { definition, input, error });
       });
       const honeypot = document.createElement("input"); honeypot.className = "wf-honeypot"; honeypot.name = "website"; honeypot.tabIndex = -1; honeypot.autocomplete = "off"; honeypot.setAttribute("aria-hidden", "true"); form.append(honeypot);
-      const button = document.createElement("button"); button.className = "wf-button"; button.type = "submit"; button.textContent = config.button_text; form.append(button);
+      const button = document.createElement("button"); button.className = "wf-button"; button.type = "submit"; button.textContent = config.button_text; button.style.background = appearance.primary_color || "#2457E6"; form.append(button);
       const feedback = message(""); feedback.hidden = true; form.append(feedback); card.append(form); root.replaceChildren(card);
       let idempotencyKey = createKey();
+      form.addEventListener("input", () => track("form_started"), { once: true });
       function validate() {
         let firstInvalid = null; let valid = true;
         fields.forEach(({ definition, input, error }) => { let text = ""; if (definition.required && !input.value.trim()) text = "This field is required."; else if (definition.type === "email" && input.value && !input.validity.valid) text = "Enter a valid email address."; error.textContent = text; error.hidden = !text; input.setAttribute("aria-invalid", String(Boolean(text))); if (text && !firstInvalid) firstInvalid = input; valid = valid && !text; });
@@ -56,7 +79,7 @@
         const payload = {}; fields.forEach(({ input }, name) => { payload[name] = input.value.trim(); });
         try {
           const response = await fetch(`${apiBase}/public/v1/submissions`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey }, body: JSON.stringify({ widget_id: widgetId, fields: payload, website: honeypot.value }) });
-          if (response.ok) { const success = document.createElement("div"); success.className = "wf-success"; const heading = document.createElement("h3"); heading.textContent = "Thank you"; success.append(heading, message("Your submission was received.")); card.replaceChildren(success); return; }
+          if (response.ok) { const success = document.createElement("div"); success.className = "wf-success"; const heading = document.createElement("h3"); heading.textContent = "Thank you"; success.append(heading, message(appearance.success_message || "Your submission was received.")); card.replaceChildren(success); return; }
           feedback.textContent = response.status === 429 ? "Too many attempts. Please wait a moment and try again." : "Please check your details and try again."; feedback.className = "wf-message wf-message--error"; feedback.hidden = false;
         } catch (_) { feedback.textContent = "We could not send your submission. Please try again shortly."; feedback.className = "wf-message wf-message--error"; feedback.hidden = false; }
         button.disabled = false; button.textContent = config.button_text; idempotencyKey = createKey();
