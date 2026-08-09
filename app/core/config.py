@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     ip_hash_secret: str = "development-ip-hash-secret"
     notifier_mode: str = "console"
+    webhook_url: str = ""
+    webhook_secret: str = ""
+    webhook_previous_secret: str = ""
+    webhook_timeout_seconds: float = 5.0
     geo_enrichment_enabled: bool = False
     geo_request_timeout_seconds: float = 1.5
     outbox_poll_seconds: float = 2.0
