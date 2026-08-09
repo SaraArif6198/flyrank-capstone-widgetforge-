@@ -35,3 +35,16 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   if (!response.ok) throw new Error("We could not load this information. Please try again.");
   return response.json();
 }
+
+export async function downloadCsv(path: string): Promise<Blob> {
+  const token = session.get();
+  const response = await fetch(path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (response.status === 401) {
+    session.clear();
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+  if (!response.ok) throw new Error("We could not prepare that export. Please try again.");
+  return response.blob();
+}
