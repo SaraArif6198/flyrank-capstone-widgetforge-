@@ -190,7 +190,7 @@ Interactive OpenAPI documentation is available at `/docs`; the complete contract
 Run the backend suite inside its actual Docker environment:
 
 ```powershell
-docker compose exec api python -m unittest discover -s tests -v
+docker compose exec -T -e WIDGETFORGE_TEST_MODE=1 -e DATABASE_URL=sqlite:////tmp/widgetforge-tests.db api python -m unittest discover -s tests -v
 ```
 
 The backend suite and a separate Chromium-based second-origin proof cover:
@@ -241,7 +241,7 @@ npm.cmd run build
 
 ## Limitations and next steps
 
-WidgetForge is a local-first portfolio capstone. It is not a production deployment or privacy-compliance certification. The most valuable next improvements are Redis-backed rate limiting, structured observability/correlation IDs, user-managed allowed origins, signed webhook delivery, and a separately deployed notification worker.
+WidgetForge is a local-first portfolio capstone. It is not a production deployment or privacy-compliance certification. The most valuable next improvements are Redis-backed rate limiting, structured observability/correlation IDs, per-widget webhook-secret management, and managed production deployment of the notification worker.
 
 ---
 

@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import Mock, patch
 
@@ -31,6 +32,8 @@ class FailingNotifier:
 class PublicPathTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if os.getenv("WIDGETFORGE_TEST_MODE") != "1" or "test" not in str(engine.url):
+            raise RuntimeError("Refusing to reset a non-test database. Run with WIDGETFORGE_TEST_MODE=1 and a test DATABASE_URL.")
         Base.metadata.drop_all(bind=engine); Base.metadata.create_all(bind=engine); seed()
         cls.client = TestClient(app)
 
@@ -44,10 +47,10 @@ class PublicPathTests(unittest.TestCase):
         return {"widget_id": self.widget.public_id, "fields": {"email": "lead@example.com", "name": "Lead"}, "website": ""}, {"Origin": "http://localhost:8080", "Idempotency-Key": key}
 
     def test_config_cors_cache_and_submission_replay(self):
-        config = self.client.get(f"/public/v1/widgets/{self.widget.public_id}/config", headers={"Origin": "http://localhost:8080"})
+        config = self.client.get(f"/public/v1/widgets/{self.widget.public_id}/config", headers={"Origin": "http://localhost:8081"})
         self.assertEqual(config.status_code, 200); self.assertIn("max-age=300", config.headers["cache-control"])
         self.assertEqual(config.json()["display_options"]["primary_color"], "#2457E6")
-        self.assertEqual(config.headers["access-control-allow-origin"], "http://localhost:8080")
+        self.assertEqual(config.headers["access-control-allow-origin"], "http://localhost:8081")
         bundle = self.client.get("/widget.v1.js")
         self.assertEqual(bundle.status_code, 200)
         self.assertEqual(bundle.headers["cache-control"], "public, max-age=31536000, immutable")
@@ -74,7 +77,9 @@ class PublicPathTests(unittest.TestCase):
         deliveries = self.client.get("/api/v1/webhook-deliveries", headers=owner_headers)
         self.assertEqual(deliveries.status_code, 200); self.assertIn(first.json()["id"], [item["submission_id"] for item in deliveries.json()])
         with SessionLocal() as db:
-            self.assertEqual(len(list(db.scalars(select(WidgetEvent)))), 3)
+            events = list(db.scalars(select(WidgetEvent)))
+            self.assertEqual(sum(event.event_type == "widget_viewed" for event in events), 1)
+            self.assertEqual(sum(event.event_type == "form_started" for event in events), 1)
         updated = self.client.patch(f"/api/v1/submissions/{first.json()['id']}/status", json={"lead_status": "contacted"}, headers=owner_headers)
         self.assertEqual(updated.status_code, 200); self.assertEqual(updated.json()["lead_status"], "contacted")
         bulk = self.client.patch("/api/v1/submissions/bulk-status", json={"submission_ids": [first.json()["id"]], "lead_status": "qualified"}, headers=owner_headers)
@@ -113,17 +118,29 @@ class PublicPathTests(unittest.TestCase):
         with SessionLocal() as db:
             self.widget.display_options = {"allowed_origins": ["https://acme.example"]}
             db.merge(self.widget); db.commit()
+        allowed_config = self.client.get(f"/public/v1/widgets/{self.widget.public_id}/config", headers={"Origin": "https://acme.example"})
+        self.assertEqual(allowed_config.status_code, 200)
+        blocked_config = self.client.get(f"/public/v1/widgets/{self.widget.public_id}/config", headers={"Origin": "https://blocked.example"})
+        self.assertEqual(blocked_config.status_code, 403)
         payload, headers = self.payload("00000000-0000-0000-0000-000000000060")
+        headers["Origin"] = "https://acme.example"
+        allowed = self.client.post("/public/v1/submissions", json=payload, headers=headers)
+        self.assertEqual(allowed.status_code, 201)
+        self.assertEqual(allowed.headers["access-control-allow-origin"], "https://acme.example")
+        payload, headers = self.payload("00000000-0000-0000-0000-000000000061")
         headers["Origin"] = "https://blocked.example"
-        self.assertEqual(self.client.post("/public/v1/submissions", json=payload, headers=headers).status_code, 403)
+        blocked = self.client.post("/public/v1/submissions", json=payload, headers=headers)
+        self.assertEqual(blocked.status_code, 403)
+        self.assertEqual(blocked.headers["access-control-allow-origin"], "https://blocked.example")
         with SessionLocal() as db:
             widget = db.get(Widget, self.widget.id)
             widget.display_options = {}
             db.commit()
 
     def test_preflight_and_both_geo_providers_down(self):
-        preflight = self.client.options("/public/v1/submissions", headers={"Origin": "http://localhost:8080", "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type,idempotency-key"})
+        preflight = self.client.options("/public/v1/submissions", headers={"Origin": "http://localhost:8081", "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type,idempotency-key"})
         self.assertEqual(preflight.status_code, 200)
+        self.assertEqual(preflight.headers["access-control-allow-origin"], "http://localhost:8081")
         with SessionLocal() as db:
             submission, _ = accept_submission(db, public_id=self.widget.public_id, fields={"email": "nogeo@example.com", "name": "No Geo"}, honeypot="", idempotency_key="00000000-0000-0000-0000-000000000040", ip="127.0.0.1", origin=None, geo_providers=[FailingGeo(), FailingGeo()])
             self.assertIsNone(submission.geo_country)

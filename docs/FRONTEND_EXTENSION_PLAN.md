@@ -89,7 +89,7 @@ Accessibility rules: WCAG AA text contrast, visible focus rings, 44px minimum po
 
 ## Phase 3 — Installation and domain controls
 
-**Progress (2026-08-09):** Started locally. The validated widget appearance contract now accepts an optional normalized `allowed_origins` list. Public lead submissions are rejected with `403` when a widget has an allowlist and the browser origin is not listed. A regression test covers the blocked-origin path. The builder now gives owners an optional comma-separated allowlist with origin-format guidance; the backend remains the enforcement point. The dashboard also includes a per-widget installation panel with a fetched versioned snippet, copy feedback, and clear HTML/React/WordPress guidance. A test-installation preview link remains pending.
+**Progress (2026-08-09):** Started locally. The validated widget appearance contract now accepts an optional normalized `allowed_origins` list. The saved per-widget list is the single customer-facing domain control: public embed requests receive dynamic CORS headers, while public events and lead submissions are rejected with `403` when a widget has an allowlist and the browser origin is not listed. No operator `.env` change or API restart is required when an owner adds a site. Regression tests cover an allowed origin, a blocked origin, arbitrary-origin preflight, and a real browser embed on a second origin. The builder now gives owners an optional comma-separated allowlist with origin-format guidance; the backend remains the enforcement point. The dashboard also includes a per-widget installation panel with a fetched versioned snippet, copy feedback, and clear HTML/React/WordPress guidance. A test-installation preview link remains pending.
 
 ### Frontend
 

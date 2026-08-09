@@ -14,11 +14,14 @@ router = APIRouter(tags=["public"])
 @router.get("/public/v1/widgets/{public_id}/config", response_model=PublicWidgetConfig)
 def public_config(public_id: str, request: Request, db: Session = Depends(get_db)):
     widget = get_active_widget(db, public_id)
+    appearance = WidgetAppearance.model_validate(widget.display_options or {})
+    origin = request.headers.get("origin")
+    if appearance.allowed_origins and origin and origin not in appearance.allowed_origins:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This widget is not allowed on this origin")
     etag = f'"widget-{widget.public_id}-{widget.config_version}"'
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
-    appearance = WidgetAppearance.model_validate(widget.display_options or {}).model_dump()
-    response = PublicWidgetConfig(id=widget.public_id, widget_type=widget.widget_type, title=widget.title, description=widget.description, form_fields=widget.form_fields, button_text=widget.button_text, display_options=appearance)
+    response = PublicWidgetConfig(id=widget.public_id, widget_type=widget.widget_type, title=widget.title, description=widget.description, form_fields=widget.form_fields, button_text=widget.button_text, display_options=appearance.model_dump())
     return Response(content=response.model_dump_json(), media_type="application/json", headers={"Cache-Control": "public, max-age=300, must-revalidate", "ETag": etag})
 
 

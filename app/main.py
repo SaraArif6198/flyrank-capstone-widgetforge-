@@ -1,9 +1,8 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api import auth, dashboard, public, widgets
@@ -24,7 +23,6 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="WidgetForge API", version="0.1.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=get_settings().widget_origins, allow_credentials=False, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "Idempotency-Key"])
 app.include_router(auth.router)
 app.include_router(widgets.router)
 app.include_router(public.router)
@@ -33,11 +31,31 @@ app.include_router(dashboard.router)
 
 @app.middleware("http")
 async def limit_public_submission_size(request: Request, call_next):
+    is_public_widget_request = request.url.path.startswith("/public/v1/")
+    origin = request.headers.get("origin")
+
+    def apply_public_cors(response: Response) -> Response:
+        if not origin:
+            return response
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Idempotency-Key"
+        response.headers["Access-Control-Max-Age"] = "600"
+        response.headers["Vary"] = "Origin"
+        return response
+
+    # A preflight contains no widget ID, so its eligibility cannot be decided
+    # per widget. The subsequent POST is always checked against that widget's
+    # saved allowed-origins list in app.api.public.
+    if is_public_widget_request and request.method == "OPTIONS":
+        return apply_public_cors(Response(status_code=200))
     if request.url.path == "/public/v1/submissions":
         length = request.headers.get("content-length")
         if length and int(length) > get_settings().max_submission_bytes:
-            return error_response(413, "payload_too_large", "Request body is too large")
+            return apply_public_cors(error_response(413, "payload_too_large", "Request body is too large"))
     response = await call_next(request)
+    if is_public_widget_request:
+        response = apply_public_cors(response)
     if request.url.path == "/widget.v1.js":
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response

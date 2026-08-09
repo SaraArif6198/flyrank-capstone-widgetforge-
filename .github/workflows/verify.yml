@@ -18,7 +18,7 @@ jobs:
           docker compose up --build -d
           docker compose exec -T api python scripts/seed_demo.py
       - name: Run backend proof
-        run: docker compose exec -T api python -m unittest discover -s tests -v
+        run: docker compose exec -T -e WIDGETFORGE_TEST_MODE=1 -e DATABASE_URL=sqlite:////tmp/widgetforge-tests.db api python -m unittest discover -s tests -v
       - name: Run browser proof
         run: |
           npm --prefix frontend install

@@ -1,3 +1,4 @@
+import os
 import unittest
 
 from fastapi.testclient import TestClient
@@ -10,6 +11,8 @@ from scripts.seed_demo import seed
 class OwnerPathTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if os.getenv("WIDGETFORGE_TEST_MODE") != "1" or "test" not in str(engine.url):
+            raise RuntimeError("Refusing to reset a non-test database. Run with WIDGETFORGE_TEST_MODE=1 and a test DATABASE_URL.")
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         seed()
