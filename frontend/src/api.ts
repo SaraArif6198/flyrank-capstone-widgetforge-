@@ -1,11 +1,22 @@
 export type LoginResponse = { access_token: string; token_type: string };
 
 const TOKEN_KEY = "widgetforge_access_token";
+const SESSION_EVENT = "widgetforge-session-changed";
+
+function notifySessionChange() {
+  window.dispatchEvent(new Event(SESSION_EVENT));
+}
 
 export const session = {
   get: () => sessionStorage.getItem(TOKEN_KEY),
-  set: (token: string) => sessionStorage.setItem(TOKEN_KEY, token),
-  clear: () => sessionStorage.removeItem(TOKEN_KEY),
+  set: (token: string) => {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    notifySessionChange();
+  },
+  clear: () => {
+    sessionStorage.removeItem(TOKEN_KEY);
+    notifySessionChange();
+  },
 };
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
