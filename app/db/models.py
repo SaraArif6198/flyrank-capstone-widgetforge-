@@ -70,9 +70,32 @@ class Submission(Base):
     geo_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     geo_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     spam_status: Mapped[str] = mapped_column(String(20), nullable=False, default="accepted")
+    lead_status: Mapped[str] = mapped_column(String(20), nullable=False, default="new", index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (UniqueConstraint("widget_id", "idempotency_key", name="uq_submission_idempotency"),)
+
+
+class WidgetEvent(Base):
+    __tablename__ = "widget_events"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    widget_id: Mapped[str] = mapped_column(ForeignKey("widgets.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    source_origin: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    session_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class WidgetWebhook(TimestampMixin, Base):
+    __tablename__ = "widget_webhooks"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    widget_id: Mapped[str] = mapped_column(ForeignKey("widgets.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class OutboxEvent(TimestampMixin, Base):

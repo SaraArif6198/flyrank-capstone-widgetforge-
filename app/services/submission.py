@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import OutboxEvent, Submission, Widget
+from app.db.models import OutboxEvent, Submission, Widget, WidgetEvent
 from app.integrations.geo import GeoProvider, configured_geo_providers, resolve_geo
 
 
@@ -29,6 +29,7 @@ class InMemoryRateLimiter:
 
 
 limiter = InMemoryRateLimiter()
+analytics_limiter = InMemoryRateLimiter()
 
 
 def hash_ip(ip: str) -> str:
@@ -75,6 +76,7 @@ def accept_submission(db: Session, *, public_id: str, fields: dict, honeypot: st
     submission = Submission(tenant_id=widget.tenant_id, widget_id=widget.id, idempotency_key=idempotency_key, payload=payload, source_origin=origin, ip_hash=hash_ip(ip), geo_country=geo.country if geo else None, geo_city=geo.city if geo else None, geo_provider=geo.provider if geo else None)
     db.add(submission)
     db.flush()
+    db.add(WidgetEvent(tenant_id=widget.tenant_id, widget_id=widget.id, event_type="submission_accepted", source_origin=origin, session_hash=hash_ip(f"submission:{idempotency_key}")))
     db.add(OutboxEvent(submission_id=submission.id))
     try:
         db.commit()
